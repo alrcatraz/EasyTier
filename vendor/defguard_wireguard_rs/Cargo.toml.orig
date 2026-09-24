@@ -1,0 +1,41 @@
+[package]
+name = "defguard_wireguard_rs"
+version = "0.4.2"
+edition = "2021"
+description = "A unified multi-platform high-level API for managing WireGuard interfaces"
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/DefGuard/wireguard-rs"
+repository = "https://github.com/DefGuard/wireguard-rs"
+keywords = ["wireguard", "network", "vpn"]
+categories = ["network-programming"]
+
+[dependencies]
+base64 = "0.21"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+env_logger = "0.11"
+x25519-dalek = { version = "2.0", features = ["getrandom", "static_secrets"] }
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+libc = { version = "0.2", default-features = false }
+nix = { version = "0.27", features = ["ioctl", "socket"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = { version = "0.2", default-features = false }
+nix = { version = "0.27", features = ["ioctl", "socket"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+netlink-packet-core = "0.7"
+netlink-packet-generic = "0.3"
+netlink-packet-route = "0.17"
+netlink-packet-utils = "0.5"
+netlink-packet-wireguard = "0.2"
+netlink-sys = "0.8"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

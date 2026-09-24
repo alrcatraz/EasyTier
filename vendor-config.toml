@@ -1,13 +1,9 @@
 [source.crates-io]
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/EasyTier/http_req.git"]
-git = "https://github.com/EasyTier/http_req.git"
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/EasyTier/kcp-sys?rev=94964794caaed5d388463137da59b97499619e5f"]
+[source."git+https://github.com/EasyTier/kcp-sys?rev=d7427c22d764deb1860a7d37acc446ed5033464c"]
 git = "https://github.com/EasyTier/kcp-sys"
-rev = "94964794caaed5d388463137da59b97499619e5f"
+rev = "d7427c22d764deb1860a7d37acc446ed5033464c"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/EasyTier/rust-tun"]
@@ -17,6 +13,10 @@ replace-with = "vendored-sources"
 [source."git+https://github.com/EasyTier/service-manager-rs.git?branch=main"]
 git = "https://github.com/EasyTier/service-manager-rs.git"
 branch = "main"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/tokio-websockets"]
+git = "https://github.com/EasyTier/tokio-websockets"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/EasyTier/windivert-rust.git?rev=adcc56d1550f7b5377ec2b3429f413ee24a77375"]

@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - "*"
+    # not on tags
+  pull_request:
+
+env:
+  RUSTFLAGS: "-D warnings"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  cargo_tests:
+    name: ${{ matrix.os }} ${{ matrix.rust_channel }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest"]
+        rust_channel:
+          - stable
+          - beta
+          - nightly
+          # The real MSRV is 1.66 (inherited from signal-hook) but tests require 1.74.
+          # NOTE: Keep this in sync with the `if` condition below.
+          - 1.74
+          # The --no-default-features (no `os_pipe`) MSRV.
+          - 1.87
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust_channel }}
+    # macOS does "timer coalescing" by default, which can add ~100ms to wakeup
+    # times and cause tests to fail. To be honest, I'm not exactly sure where
+    # this happens (child wakeup vs SIGCHLD delivery vs poll return).
+    - name: disable timer coalescing on macOS
+      run: sudo sysctl -w kern.timer.coalescing_enabled=0
+      if: matrix.os == 'macOS-latest'
+    - run: cargo test
+    - run: cargo test --no-default-features
+      if: matrix.rust_channel != 1.74

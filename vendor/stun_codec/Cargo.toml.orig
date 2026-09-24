@@ -1,0 +1,24 @@
+[package]
+name = "stun_codec"
+version = "0.3.5"
+authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+description = "Encoders and decoders for STUN (RFC 5389) and its extensions"
+homepage = "https://github.com/sile/stun_codec"
+repository = "https://github.com/sile/stun_codec"
+readme = "README.md"
+keywords = ["STUN"]
+categories = ["encoding"]
+license = "MIT"
+edition = "2021"
+
+[badges]
+coveralls = {repository = "sile/stun_codec"}
+
+[dependencies]
+bytecodec = "0.4"
+byteorder = "1"
+crc = "3"
+hmac = "0.12.1"
+md5 = "0.7"
+sha1 = "0.10.6"
+trackable = "1"

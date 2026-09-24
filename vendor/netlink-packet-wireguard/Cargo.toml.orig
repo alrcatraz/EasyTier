@@ -1,0 +1,26 @@
+[package]
+name = "netlink-packet-wireguard"
+version = "0.2.4"
+authors = ["Leo <leo881003@gmail.com>", "Jake McGinty <me@jake.su>"]
+edition = "2021"
+homepage = "https://github.com/rust-netlink/netlink-packet-wireguard"
+repository = "https://github.com/rust-netlink/netlink-packet-wireguard"
+keywords = ["wireguard", "netlink", "linux"]
+license = "MIT"
+readme = "README.md"
+description = "Wireguard generic netlink packet definitions"
+
+[dependencies]
+libc = "0.2.98"
+log = "0.4.14"
+netlink-packet-generic = { version = "0.4.0" }
+netlink-packet-core = { version = "0.8.0" }
+
+[dev-dependencies]
+base64 = "0.13.0"
+env_logger = "0.10.0"
+futures = "0.3.16"
+getrandom = "0.2.10"
+netlink-proto = { version = "0.12" }
+genetlink = { version = "0.2.6" }
+tokio = { version = "1.9.0", features = ["macros", "rt-multi-thread"] }

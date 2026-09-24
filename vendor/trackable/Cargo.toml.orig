@@ -1,0 +1,23 @@
+[package]
+name = "trackable"
+version = "1.3.0"
+authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+description = "This library provides a way to track objects manually as an alternative to mechanisms like backtracing"
+homepage = "https://github.com/sile/trackable"
+repository = "https://github.com/sile/trackable"
+readme = "README.md"
+license = "MIT"
+
+[badges]
+coveralls = {repository = "sile/trackable"}
+
+[dependencies]
+serde = { version = "1", optional = true }
+serde_derive = { version = "1", optional = true }
+trackable_derive = "1"
+
+[features]
+serialize = ["serde", "serde_derive"]
+
+[package.metadata.docs.rs]
+all-features = true

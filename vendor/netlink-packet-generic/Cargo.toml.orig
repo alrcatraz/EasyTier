@@ -1,0 +1,17 @@
+[package]
+name = "netlink-packet-generic"
+version = "0.4.0"
+authors = ["Leo <leo881003@gmail.com>"]
+edition = "2021"
+homepage = "https://github.com/rust-netlink/netlink-packet-generic"
+repository = "https://github.com/rust-netlink/netlink-packet-generic"
+keywords = ["netlink", "linux"]
+license = "MIT"
+readme = "README.md"
+description = "generic netlink packet types"
+
+[dependencies]
+netlink-packet-core = { version = "0.8.0" }
+
+[dev-dependencies]
+netlink-sys = { version = "0.8.3" }

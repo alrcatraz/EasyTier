@@ -1,0 +1,19 @@
+[package]
+name = "ordered_hash_map"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+repository = "https://gitlab.com/kelderon/rs-collections"
+readme = "README.md"
+keywords = ["no_std", "ordered_hash_map", "ordered_hash_set", "linked_hash_map", "data_structures"]
+categories = ["data-structures", "no-std"]
+description = "HashMap which preserves insertion order"
+rust-version.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+hashbrown = "^0.15.2"
+serde = { workspace = true, optional = true }
