@@ -1,1 +1,3 @@
 *.sh text eol=lf
+# Nix flake CI: vendored crates must stay byte-exact (cargo checksums).
+/vendor/** -text -diff linguist-generated

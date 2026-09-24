@@ -1,0 +1,37 @@
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/http_req.git"]
+git = "https://github.com/EasyTier/http_req.git"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/kcp-sys?rev=94964794caaed5d388463137da59b97499619e5f"]
+git = "https://github.com/EasyTier/kcp-sys"
+rev = "94964794caaed5d388463137da59b97499619e5f"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/rust-tun"]
+git = "https://github.com/EasyTier/rust-tun"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/service-manager-rs.git?branch=main"]
+git = "https://github.com/EasyTier/service-manager-rs.git"
+branch = "main"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/EasyTier/windivert-rust.git?rev=adcc56d1550f7b5377ec2b3429f413ee24a77375"]
+git = "https://github.com/EasyTier/windivert-rust.git"
+rev = "adcc56d1550f7b5377ec2b3429f413ee24a77375"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/easytier/thunk.git"]
+git = "https://github.com/easytier/thunk.git"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/smoltcp-rs/smoltcp.git?rev=0a926767a68bc88d5512afefa7529c5ecdade4ea"]
+git = "https://github.com/smoltcp-rs/smoltcp.git"
+rev = "0a926767a68bc88d5512afefa7529c5ecdade4ea"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
