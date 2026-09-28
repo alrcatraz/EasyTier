@@ -1,0 +1,127 @@
+name: nix-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: nixos
+    container:
+      image: nixos/nix:runner
+    # Secrets bind at JOB level only — step-level `env:` secret bindings are
+    # silently EMPTY on our act_runner (shape-probe verified). Do not move down.
+    env:
+      CACHE_RO_KEY_ID: ${{ secrets.CACHE_RO_KEY_ID }}
+      CACHE_RO_SECRET: ${{ secrets.CACHE_RO_SECRET }}
+      GARAGE_RW_KEY_ID: ${{ secrets.GARAGE_RW_KEY_ID }}
+      GARAGE_RW_SECRET: ${{ secrets.GARAGE_RW_SECRET }}
+      NIX_CACHE_SECRET: ${{ secrets.NIX_CACHE_SECRET }}
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.CACHE_RO_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CACHE_RO_SECRET }}
+    steps:
+      - name: Checkout
+        env:
+          CTOK: ${{ gitea.token }}
+          SHA: ${{ gitea.sha }}
+          REPO: ${{ gitea.repository }}
+        run: |
+          set -eu
+          git init -q repo && cd repo
+          git remote add origin "http://x-access-token:$CTOK@127.0.0.1:3000/$REPO.git"
+          git fetch -q --tags origin "$SHA"
+          git checkout -q FETCH_HEAD
+          git log --oneline -1
+
+      - name: Enable flakes
+        env:
+          CACHE_ENDPOINT: '${{ vars.CACHE_ENDPOINT }}'
+          CACHE_BUCKET: '${{ vars.CACHE_BUCKET }}'
+          CACHE_REGION: '${{ vars.CACHE_REGION }}'
+          CACHE_PUBKEY: '${{ vars.CACHE_PUBLIC_KEY }}'
+        run: |
+          set -eu
+          echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+          echo "filter-syscalls = false" >> /etc/nix/nix.conf
+          # Garage S3 speaks SigV4 only; nix's https://AK:SK@ basic-auth substituter is
+          # rejected ("Unsupported authorization method"). Use the s3:// substituter form.
+          # NOTE: /root/.aws/credentials is a READ-ONLY host bind in this runner image,
+          # so credentials go through NIX_CONFIG env (AWS SDK honors AWS_ACCESS_KEY_ID/SECRET).
+          # Fleet cache first, then public sources (official cache + USTC mirror fallback).
+          # nix.conf lines APPEND here — the runner image's default substituters must be
+          # overridden explicitly or --fallback can pull from an unconfigured source list.
+          printf 'substituters = s3://%s?endpoint=https://%s&region=%s https://cache.nixos.org https://mirrors.ustc.edu.cn/nix-channels/store\n' "$CACHE_BUCKET" "$CACHE_ENDPOINT" "$CACHE_REGION" >> /etc/nix/nix.conf
+          printf 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= %s\n' "$CACHE_PUBKEY" >> /etc/nix/nix.conf
+          printf '%s\n' "$NIX_CACHE_SECRET" > /root/.nix-cache.sec
+          chmod 600 /root/.nix-cache.sec
+          echo "CACHE_CONFIGURED"
+
+      - name: Build all four artifacts (musl static)
+        run: |
+          cd repo/ci
+          CORE=$(nix build --no-link --print-out-paths .#easytier-core --fallback)
+          CLI=$(nix build --no-link --print-out-paths .#easytier-cli --fallback)
+          WEB=$(nix build --no-link --print-out-paths .#easytier-web --fallback)
+          EMB=$(nix build --no-link --print-out-paths .#easytier-web-embed --fallback)
+          mkdir -p /tmp/dist
+          cp -L $CORE/bin/easytier-core /tmp/dist/easytier-core
+          cp -L $CLI/bin/easytier-cli /tmp/dist/easytier-cli
+          cp -L $WEB/bin/easytier-web /tmp/dist/easytier-web
+          cp -L $EMB/bin/easytier-web /tmp/dist/easytier-web-embed
+          $CORE/bin/easytier-core --version
+          $CLI/bin/easytier-cli --version
+          ls -la /tmp/dist
+
+      - name: Push closure to fleet cache
+        env:
+          # nix's s3:// writer needs explicit credentials; the job-wide AWS_* are
+          # the read-only pair (substituter use) and cannot write -> 403.
+          AWS_ACCESS_KEY_ID: ${{ secrets.GARAGE_RW_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.GARAGE_RW_SECRET }}
+        run: |
+          set -eu
+          cd repo/ci
+          STORE="s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}"
+          nix copy --to "$STORE" \
+            .#easytier-core .#easytier-cli .#easytier-web .#easytier-web-embed
+          # Sign what we just pushed (daemon drops secret-key-files; store sign is the reliable route).
+          for t in easytier-core easytier-cli easytier-web easytier-web-embed; do
+            P=$(nix build --no-link --print-out-paths ".#$t")
+            nix store sign --key-file /root/.nix-cache.sec --store "$STORE" "$P"
+          done
+          echo "PUSHED"
+
+      - name: Publish Gitea Release
+        env:
+          RUNNER_API_ORIGIN: '${{ vars.RUNNER_API_ORIGIN }}'
+        run: |
+          cd repo
+          REF=$(git for-each-ref --points-at HEAD --format="%(refname:lstrip=2)" refs/tags/v* | head -1)
+          [ -n "$REF" ] || { echo "no tag at HEAD"; exit 1; }
+          TAG="$REF"
+          export REL_TAG="$TAG"
+          git for-each-ref --format="%(contents)" "refs/tags/$TAG" > /tmp/anno.txt
+          echo aW1wb3J0IGpzb24sIG9zCnRhZyA9IG9zLmVudmlyb25bJ1JFTF9UQUcnXQpyYXcgPSBvcGVuKCcvdG1wL2Fubm8udHh0JykucmVhZCgpCmlmICctLS0tLUJFR0lOIFBHUCcgaW4gcmF3OgogICAgcmF3ID0gcmF3LnNwbGl0KCctLS0tLUJFR0lOIFBHUCcpWzBdCmxpbmVzID0gcmF3LnNwbGl0KGNocigxMCkpCm5hbWUgPSBuZXh0KChsIGZvciBsIGluIGxpbmVzIGlmIGwuc3RyaXAoKSksIHRhZykKYm9keSA9IGNocigxMCkuam9pbihsaW5lc1tsaW5lcy5pbmRleChuYW1lKSsxOl0pLnN0cmlwKGNocigxMCkpCnByaW50KGpzb24uZHVtcHMoeyd0YWdfbmFtZSc6IHRhZywgJ25hbWUnOiBuYW1lLCAnYm9keSc6IGJvZHkgb3IgKCdFYXN5VGllciAnICsgdGFnKSwgJ2RyYWZ0JzogRmFsc2UsICdwcmVyZWxlYXNlJzogRmFsc2V9KSkK | base64 -d > /tmp/mkpayload.py
+          PAYLOAD=$(nix develop --quiet --no-warn-dirty ./ci -c python3 /tmp/mkpayload.py)
+          # Self-hosted runners cannot reach the WAN front; the forge origin comes
+          # from repo config (RUNNER_API_ORIGIN) so no deployment detail lives here.
+          [ -n "$RUNNER_API_ORIGIN" ] || { echo "RUNNER_API_ORIGIN not configured"; exit 1; }
+          API="${RUNNER_API_ORIGIN}/api/v1/repos/${GITHUB_REPOSITORY}"
+          RESP=$(curl -s -X POST -H "Authorization: token $RELEASE_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD" "$API/releases")
+          RID=$(printf "%s" "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          if [ -z "$RID" ]; then
+            RID=$(curl -s -H "Authorization: token $RELEASE_TOKEN" "$API/releases/tags/$TAG" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          fi
+          if [ -z "$RID" ]; then
+            echo "RELEASE_CREATE_FAILED resp=$RESP"
+            exit 1
+          fi
+          echo "release_id=$RID"
+          for f in /tmp/dist/*; do
+            FN=$(basename "$f")
+            curl -s -X POST -H "Authorization: token $RELEASE_TOKEN" -F "attachment=@$f" "$API/releases/$RID/assets?name=$FN" >/dev/null
+            echo "uploaded $FN"
+          done
+          echo "RELEASE_DONE"

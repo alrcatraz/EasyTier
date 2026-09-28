@@ -202,5 +202,14 @@
     {
       packages = forAllSystems mkPackages;
       defaultPackage = forAllSystems (system: (mkPackages system).easytier-core);
+
+      # CI helper tooling — the workflow must not ad-hoc-glob /nix/store for tools.
+      devShells = forAllSystems (system:
+        let pkgs = import nixpkgs { inherit system; };
+        in {
+          default = pkgs.mkShell {
+            packages = [ pkgs.jq pkgs.python3 ];
+          };
+        });
     };
 }
