@@ -54,7 +54,11 @@ jobs:
           # overridden explicitly or --fallback can pull from an unconfigured source list.
           # READ side lists the arch bucket first, then the legacy bucket (transitional —
           # legacy still serves pre-migration objects), then public mirrors.
-          printf 'substituters = s3://%s?endpoint=https://%s&region=%s s3://astra-lab-cachix?endpoint=https://%s&region=%s https://cache.nixos.org https://mirrors.ustc.edu.cn/nix-channels/store\n' "$CACHE_BUCKET" "$CACHE_ENDPOINT" "$CACHE_REGION" "$CACHE_ENDPOINT" "$CACHE_REGION" >> /etc/nix/nix.conf
+          # profile=cache-ro is REQUIRED: the runner's mounted /root/.aws/credentials has
+          # only NAMED profiles ([fleet-cache], [cache-ro]) and no [default]; without an
+          # explicit profile nix falls back to anonymous GETs and Garage answers 403,
+          # silently disabling the cache ("disabling binary cache ... for 60 seconds").
+          printf 'substituters = s3://%s?endpoint=https://%s&region=%s&profile=cache-ro s3://astra-lab-cachix?endpoint=https://%s&region=%s&profile=cache-ro https://cache.nixos.org https://mirrors.ustc.edu.cn/nix-channels/store\n' "$CACHE_BUCKET" "$CACHE_ENDPOINT" "$CACHE_REGION" "$CACHE_ENDPOINT" "$CACHE_REGION" >> /etc/nix/nix.conf
           printf 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= %s\n' "$CACHE_PUBKEY" >> /etc/nix/nix.conf
           printf '%s\n' "$NIX_CACHE_SECRET" > /root/.nix-cache.sec
           chmod 600 /root/.nix-cache.sec
