@@ -52,7 +52,9 @@ jobs:
           # Fleet cache first, then public sources (official cache + USTC mirror fallback).
           # nix.conf lines APPEND here — the runner image's default substituters must be
           # overridden explicitly or --fallback can pull from an unconfigured source list.
-          printf 'substituters = s3://%s?endpoint=https://%s&region=%s https://cache.nixos.org https://mirrors.ustc.edu.cn/nix-channels/store\n' "$CACHE_BUCKET" "$CACHE_ENDPOINT" "$CACHE_REGION" >> /etc/nix/nix.conf
+          # READ side lists the arch bucket first, then the legacy bucket (transitional —
+          # legacy still serves pre-migration objects), then public mirrors.
+          printf 'substituters = s3://%s?endpoint=https://%s&region=%s s3://astra-lab-cachix?endpoint=https://%s&region=%s https://cache.nixos.org https://mirrors.ustc.edu.cn/nix-channels/store\n' "$CACHE_BUCKET" "$CACHE_ENDPOINT" "$CACHE_REGION" "$CACHE_ENDPOINT" "$CACHE_REGION" >> /etc/nix/nix.conf
           printf 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= %s\n' "$CACHE_PUBKEY" >> /etc/nix/nix.conf
           printf '%s\n' "$NIX_CACHE_SECRET" > /root/.nix-cache.sec
           chmod 600 /root/.nix-cache.sec
