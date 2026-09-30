@@ -19,8 +19,11 @@ jobs:
       GARAGE_RW_SECRET: ${{ secrets.GARAGE_RW_SECRET }}
       NIX_CACHE_SECRET: ${{ secrets.NIX_CACHE_SECRET }}
       RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.CACHE_RO_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.CACHE_RO_SECRET }}
+      # Read-side creds are NOT injected at job level: nix's AWS SDK prefers AWS_*
+      # env over the mounted /root/.aws/credentials, so binding the RO pair here
+      # shadowed the file's [cache-ro] profile (placeholder value -> Garagar 403).
+      # The read side resolves profile=cache-ro from the mounted file instead;
+      # only the WRITE step sets AWS_* explicitly (GARAGE_RW_*).
     steps:
       - name: Checkout
         env:
@@ -65,30 +68,29 @@ jobs:
           echo "CACHE_CONFIGURED"
 
       - name: Verify fleet cache is reachable (fail fast)
+        env:
+          CACHE_ENDPOINT: '${{ vars.CACHE_ENDPOINT }}'
+          CACHE_BUCKET: '${{ vars.CACHE_BUCKET }}'
+          CACHE_REGION: '${{ vars.CACHE_REGION }}'
         run: |
           set -eu
-          echo "=== [1] job-wide AWS env (nix reads these FIRST):"
-          echo "  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-<unset>} (len ${#AWS_ACCESS_KEY_ID})"
-          echo "  AWS_PROFILE=${AWS_PROFILE:-<unset>}"
-          echo "  AWS_DEFAULT_PROFILE=${AWS_DEFAULT_PROFILE:-<unset>}"
-          echo "  AWS_SHARED_CREDENTIALS_FILE=${AWS_SHARED_CREDENTIALS_FILE:-<unset>}"
-          echo "  AWS_EC2_METADATA_DISABLED=${AWS_EC2_METADATA_DISABLED:-<unset>}"
-          echo "  AWS_REGION=${AWS_REGION:-<unset>} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-<unset>}"
-          echo "  HOME=$HOME  pwd=$(pwd)"
-          echo "=== [2] credentials file in this job container:"
-          ls -la /root/.aws/credentials 2>&1 || echo "NO FILE"
-          echo "=== [3] nix, resolved from PATH:"
-          command -v nix; nix --version
-          echo "=== [4] nix store info, env UNCHANGED (this is the failing call):"
-          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
-          echo "=== [5] same, but with AWS_* env scrubbed (tests whether env poisoning is the cause):"
-          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_PROFILE AWS_SESSION_TOKEN || true
-          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
-          echo "=== [6] same, but with explicit AWS_SHARED_CREDENTIALS_FILE:"
-          export AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials
-          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
-          echo "DIAG_DONE"
-          exit 1
+          # A bad secret / substituter misconfig does NOT fail the build — nix silently
+          # disables the cache and cold-builds the whole musl chain (~85 min on this
+          # runner). Probe first so a broken credential dies in seconds.
+          fail=0
+          for b in "$CACHE_BUCKET" "astra-lab-cachix"; do
+            if nix store info --store "s3://$b?endpoint=https://$CACHE_ENDPOINT&region=$CACHE_REGION&profile=cache-ro" >/dev/null 2>&1; then
+              echo "OK   authenticated read: $b"
+            else
+              echo "FAIL authenticated read: $b  (check repo secret CACHE_RO_*/ mounted /root/.aws/credentials [cache-ro])"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::fleet cache unreachable — aborting before build"
+            exit 1
+          fi
+          echo "CACHE_VERIFIED"
 
       - name: Build all four artifacts (musl static)
         run: |
