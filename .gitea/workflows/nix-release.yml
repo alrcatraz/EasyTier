@@ -67,18 +67,26 @@ jobs:
       - name: Verify fleet cache is reachable (fail fast)
         run: |
           set -eu
-          # DIAGNOSTIC (temporary): capture the real job environment so a 403 can be
-          # traced to its cause instead of guessed at.
-          echo "=== env (AWS/NIX relevant):"; env | grep -E '^(AWS|NIX|HOME|USER|PATH)=' || true
-          echo "=== /root/.aws:"; ls -la /root/.aws 2>&1 || true
-          echo "=== profiles visible:"; grep -E '^\[' /root/.aws/credentials 2>&1 || true
-          echo "=== nix version:"; nix --version
-          echo "=== nix.conf substituters:"; grep -E '^substituters' /etc/nix/nix.conf || true
-          echo "=== raw store info (stderr shown):"
-          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "store info exit=$?"
-          echo "=== fallback: same but with explicit AWS env from the credentials file:"
+          echo "=== [1] job-wide AWS env (nix reads these FIRST):"
+          echo "  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-<unset>} (len ${#AWS_ACCESS_KEY_ID})"
+          echo "  AWS_PROFILE=${AWS_PROFILE:-<unset>}"
+          echo "  AWS_DEFAULT_PROFILE=${AWS_DEFAULT_PROFILE:-<unset>}"
+          echo "  AWS_SHARED_CREDENTIALS_FILE=${AWS_SHARED_CREDENTIALS_FILE:-<unset>}"
+          echo "  AWS_EC2_METADATA_DISABLED=${AWS_EC2_METADATA_DISABLED:-<unset>}"
+          echo "  AWS_REGION=${AWS_REGION:-<unset>} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-<unset>}"
+          echo "  HOME=$HOME  pwd=$(pwd)"
+          echo "=== [2] credentials file in this job container:"
+          ls -la /root/.aws/credentials 2>&1 || echo "NO FILE"
+          echo "=== [3] nix, resolved from PATH:"
+          command -v nix; nix --version
+          echo "=== [4] nix store info, env UNCHANGED (this is the failing call):"
+          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
+          echo "=== [5] same, but with AWS_* env scrubbed (tests whether env poisoning is the cause):"
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_PROFILE AWS_SESSION_TOKEN || true
+          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
+          echo "=== [6] same, but with explicit AWS_SHARED_CREDENTIALS_FILE:"
           export AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials
-          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "with AWS_SHARED_CREDENTIALS_FILE exit=$?"
+          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "  -> exit=$?"
           echo "DIAG_DONE"
           exit 1
 
