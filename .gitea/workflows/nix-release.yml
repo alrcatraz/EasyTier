@@ -67,31 +67,20 @@ jobs:
       - name: Verify fleet cache is reachable (fail fast)
         run: |
           set -eu
-          # A mis-configured substituter does not fail the build — nix just disables the
-          # cache and silently cold-builds the whole musl chain (measured: ~1.5h on the
-          # NAS runner). Probe it here so a broken credential/config dies in seconds.
-          fail=0
-          for b in "${{ vars.CACHE_BUCKET }}" astra-lab-cachix; do
-            url="https://${{ vars.CACHE_ENDPOINT }}/$b/nix-cache-info"
-            # unsigned probe: Garage answers 403/404 when the bucket is absent or the
-            # anonymous ACL denies it — distinguishes "bucket missing" from "auth broken".
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$url" || echo 000)
-            echo "probe $b -> unsigned HTTP $code"
-          done
-          # Signed probe through nix itself: this is the real gate.
-          for b in "${{ vars.CACHE_BUCKET }}" astra-lab-cachix; do
-            if nix store info --store "s3://$b?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" >/dev/null 2>&1; then
-              echo "OK  authenticated access to $b"
-            else
-              echo "FAIL authenticated access to $b (profile=cache-ro)"
-              fail=1
-            fi
-          done
-          if [ "$fail" != 0 ]; then
-            echo "::error::fleet cache unreachable — refusing to cold-build; fix the runner credential file ([cache-ro] profile) or CACHE_* repo vars"
-            exit 1
-          fi
-          echo "CACHE_VERIFIED"
+          # DIAGNOSTIC (temporary): capture the real job environment so a 403 can be
+          # traced to its cause instead of guessed at.
+          echo "=== env (AWS/NIX relevant):"; env | grep -E '^(AWS|NIX|HOME|USER|PATH)=' || true
+          echo "=== /root/.aws:"; ls -la /root/.aws 2>&1 || true
+          echo "=== profiles visible:"; grep -E '^\[' /root/.aws/credentials 2>&1 || true
+          echo "=== nix version:"; nix --version
+          echo "=== nix.conf substituters:"; grep -E '^substituters' /etc/nix/nix.conf || true
+          echo "=== raw store info (stderr shown):"
+          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "store info exit=$?"
+          echo "=== fallback: same but with explicit AWS env from the credentials file:"
+          export AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials
+          nix store info --store "s3://${{ vars.CACHE_BUCKET }}?endpoint=https://${{ vars.CACHE_ENDPOINT }}&region=${{ vars.CACHE_REGION }}&profile=cache-ro" 2>&1 || echo "with AWS_SHARED_CREDENTIALS_FILE exit=$?"
+          echo "DIAG_DONE"
+          exit 1
 
       - name: Build all four artifacts (musl static)
         run: |
